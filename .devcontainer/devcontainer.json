@@ -1,17 +1,25 @@
 {
-	// More info about Features: https://containers.dev/features
-	"image": "mcr.microsoft.com/devcontainers/universal:2",
-	"features": {},
+    // Use the Python 3.12 + Miniconda dev container image.
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
 
-	"onCreateCommand": ".devcontainer/setup.sh",
-	"postCreateCommand": "",
+    // If you want to use Dockerfile instead, comment out "image" and use "dockerFile".
 
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-python.python"
-			],
-			"settings": {}
-		}
-	}
+    // Additional dev container Features if you want
+    "features": {},
+
+    // Runs as soon as the container is built
+    "onCreateCommand": ".devcontainer/setup.sh",
+
+    // (Optional) runs after container creation (some prefer to do
+    // everything in onCreateCommand, but you can also keep postCreateCommand for extra steps)
+    "postCreateCommand": "",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python"
+            ],
+            "settings": {}
+        }
+    }
 }
