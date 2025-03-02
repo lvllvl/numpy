@@ -2808,10 +2808,15 @@ init_gesdd(GESDD_PARAMS_t<ftyp> *params,
 
     return 1;
  error:
-    TRACE_TXT("%s failed init\n", __FUNCTION__);
     free(mem_buff);
     free(mem_buff2);
     memset(params, 0, sizeof(*params));
+
+    if (!mem_buff || !mem_buff2) {
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for SVD computation.");
+    } else {
+        PyErr_SetString(PyExc_RuntimeError, "SVD computation failed due to an unknown error in LAPACK gesdd.");
+    }
 
     return 0;
 }
@@ -2949,10 +2954,15 @@ using frealtyp = basetype_t<ftyp>;
 
     return 1;
  error:
-    TRACE_TXT("%s failed init\n", __FUNCTION__);
-    free(mem_buff2);
     free(mem_buff);
+    free(mem_buff2);
     memset(params, 0, sizeof(*params));
+    
+    if (!mem_buff || !mem_buff2) {
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for SVD computation.");
+    } else {
+        PyErr_SetString(PyExc_RuntimeError, "SVD computation failed due to an unknown error in LAPACK gesdd.");
+    }
 
     return 0;
 }
@@ -2987,76 +2997,82 @@ using basetyp = basetype_t<typ>;
     }
     steps += op_count;
 
-    if (init_gesdd(&params,
-                   JOBZ,
-                   (fortran_int)dimensions[0],
-                   (fortran_int)dimensions[1],
-dispatch_scalar<typ>())) {
-        linearize_data u_out = {}, s_out = {}, v_out = {};
-        fortran_int min_m_n = params.M < params.N ? params.M : params.N;
-
-        linearize_data a_in = init_linearize_data(params.N, params.M, steps[1], steps[0]);
-        if ('N' == params.JOBZ) {
-            /* only the singular values are wanted */
-            s_out = init_linearize_data(1, min_m_n, 0, steps[2]);
-        } else {
-            fortran_int u_columns, v_rows;
-            if ('S' == params.JOBZ) {
-                u_columns = min_m_n;
-                v_rows = min_m_n;
-            } else { /* JOBZ == 'A' */
-                u_columns = params.M;
-                v_rows = params.N;
-            }
-            u_out = init_linearize_data(
-                                u_columns, params.M,
-                                steps[3], steps[2]);
-            s_out = init_linearize_data(
-                                1, min_m_n,
-                                0, steps[4]);
-            v_out = init_linearize_data(
-                                params.N, v_rows,
-                                steps[6], steps[5]);
+    if (!init_gesdd(&params,
+                    JOBZ,
+                    (fortran_int)dimensions[0],
+                    (fortran_int)dimensions[1],
+                    dispatch_scalar<typ>()))
+    { 
+        if (PyErr_Occurred()) {
+            return;
         }
-
-        for (iter = 0; iter < outer_dim; ++iter) {
-            int not_ok;
-            /* copy the matrix in */
-            linearize_matrix((typ*)params.A, (typ*)args[0], &a_in);
-            not_ok = call_gesdd(&params);
-            if (!not_ok) {
-                if ('N' == params.JOBZ) {
-                    delinearize_matrix((basetyp*)args[1], (basetyp*)params.S, &s_out);
-                } else {
-                    if ('A' == params.JOBZ && min_m_n == 0) {
-                        /* Lapack has betrayed us and left these uninitialized,
-                         * so produce an identity matrix for whichever of u
-                         * and v is not empty.
-                         */
-                        identity_matrix((typ*)params.U, params.M);
-                        identity_matrix((typ*)params.VT, params.N);
-                    }
-
-                    delinearize_matrix((typ*)args[1], (typ*)params.U, &u_out);
-                    delinearize_matrix((basetyp*)args[2], (basetyp*)params.S, &s_out);
-                    delinearize_matrix((typ*)args[3], (typ*)params.VT, &v_out);
-                }
-            } else {
-                error_occurred = 1;
-                if ('N' == params.JOBZ) {
-                    nan_matrix((basetyp*)args[1], &s_out);
-                } else {
-                    nan_matrix((typ*)args[1], &u_out);
-                    nan_matrix((basetyp*)args[2], &s_out);
-                    nan_matrix((typ*)args[3], &v_out);
-                }
-            }
-            update_pointers((npy_uint8**)args, outer_steps, op_count);
-        }
-
-        release_gesdd(&params);
+        PyErr_SetString(PyExc_RuntimeError, "Failed to initialize SVD computation.");
+        return;
     }
 
+    linearize_data u_out = {}, s_out = {}, v_out = {};
+    fortran_int min_m_n = params.M < params.N ? params.M : params.N;
+
+    linearize_data a_in = init_linearize_data(params.N, params.M, steps[1], steps[0]);
+    if ('N' == params.JOBZ) {
+        /* only the singular values are wanted */
+        s_out = init_linearize_data(1, min_m_n, 0, steps[2]);
+    } else {
+        fortran_int u_columns, v_rows;
+        if ('S' == params.JOBZ) {
+            u_columns = min_m_n;
+            v_rows = min_m_n;
+        } else { /* JOBZ == 'A' */
+            u_columns = params.M;
+            v_rows = params.N;
+        }
+        u_out = init_linearize_data(
+                            u_columns, params.M,
+                            steps[3], steps[2]);
+        s_out = init_linearize_data(
+                            1, min_m_n,
+                            0, steps[4]);
+        v_out = init_linearize_data(
+                            params.N, v_rows,
+                            steps[6], steps[5]);
+    }
+
+    for (iter = 0; iter < outer_dim; ++iter) {
+        int not_ok;
+        /* copy the matrix in */
+        linearize_matrix((typ*)params.A, (typ*)args[0], &a_in);
+        not_ok = call_gesdd(&params);
+        if (!not_ok) {
+            if ('N' == params.JOBZ) {
+                delinearize_matrix((basetyp*)args[1], (basetyp*)params.S, &s_out);
+            } else {
+                if ('A' == params.JOBZ && min_m_n == 0) {
+                    /* Lapack has betrayed us and left these uninitialized,
+                        * so produce an identity matrix for whichever of u
+                        * and v is not empty.
+                        */
+                    identity_matrix((typ*)params.U, params.M);
+                    identity_matrix((typ*)params.VT, params.N);
+                }
+
+                delinearize_matrix((typ*)args[1], (typ*)params.U, &u_out);
+                delinearize_matrix((basetyp*)args[2], (basetyp*)params.S, &s_out);
+                delinearize_matrix((typ*)args[3], (typ*)params.VT, &v_out);
+            }
+        } else {
+            error_occurred = 1;
+            if ('N' == params.JOBZ) {
+                nan_matrix((basetyp*)args[1], &s_out);
+            } else {
+                nan_matrix((typ*)args[1], &u_out);
+                nan_matrix((basetyp*)args[2], &s_out);
+                nan_matrix((typ*)args[3], &v_out);
+            }
+        }
+        update_pointers((npy_uint8**)args, outer_steps, op_count);
+    }
+
+    release_gesdd(&params);
     set_fp_invalid_or_clear(error_occurred);
 }
 

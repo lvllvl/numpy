@@ -699,6 +699,30 @@ class TestSVD(SVDCases, SVDBaseTests):
         s_from_svdvals = linalg.svdvals(x)
         assert_almost_equal(s_from_svd, s_from_svdvals)
 
+    def test_svd_small_matric(self):
+        """Test that SVD works on a small matrix"""
+        A = np.array([[1,2], [3,4]], dtype=np.float64)
+        U, S, Vt = linalg.svd(A)
+
+        # Check that the reconstructed matrix is close to the original
+        np.testing.assert_allclose( U @ np.diag(S) @ Vt, A, atol=1e-6)
+
+    def test_svd_large_matrix_memory_error(self):
+        """Test that SVD raises MemoryError for an extremely large matrix."""
+        size = 10**6  # Large enough to cause a memory failure
+
+        # A MemoryError is expected due to the large size
+        with pytest.raises(MemoryError, match="Failed to allocate memory for SVD computation."):
+            B = np.random.rand(size, size)
+            linalg.svd(B)
+
+    def test_svd_invalid_input_runtime_error(self):
+        """Test that SVD raises RuntimeError for invalid input (e.g., NaNs)."""
+        C = np.array([[np.nan, 1], [np.inf, 2]], dtype=np.float64)
+
+        # A RuntimeError is expected due to invalid input
+        with pytest.raises(RuntimeError, match="SVD computation failed due to an unknown error in LAPACK gesdd."):
+            linalg.svd(C)
 
 class SVDHermitianCases(HermitianTestCase, HermitianGeneralizedTestCase):
 
