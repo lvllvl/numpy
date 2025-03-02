@@ -699,6 +699,48 @@ class TestSVD(SVDCases, SVDBaseTests):
         s_from_svdvals = linalg.svdvals(x)
         assert_almost_equal(s_from_svd, s_from_svdvals)
 
+    def test_svd_small_matric(self):
+        """Test that SVD works on a small matrix"""
+        A = np.array([[1,2], [3,4]], dtype=np.float64)
+        U, S, Vt = linalg.svd(A)
+
+        # Check that the reconstructed matrix is close to the original
+        np.testing.assert_allclose( U @ np.diag(S) @ Vt, A, atol=1e-6)
+    
+    # def test_svd_large_matrix_memory_error(self):
+    #     """
+    #     Test that SVD code raises MemoryError when the internal allocation fails.
+    #     We don't rely on Python's np.random.rand(...) for the huge array,
+    #     because that triggers a Python-level allocation error first.
+    #     """
+    #     # You must have an exposed function like 'numpy.linalg._test_svd_allocation'
+    #     from numpy.linalg import _test_svd_allocation
+
+    #     with pytest.raises(MemoryError, match="Failed to allocate memory for SVD computation."):
+    #         _test_svd_allocation(10**6, 10**6)
+
+    def test_svd_invalid_input_linalg_error(self):
+        """Test that invalid input (NaNs/∞) triggers SVD did not converge."""
+        C = np.array([[np.nan, 1], [np.inf, 2]], dtype=np.float64)
+        with pytest.raises(np.linalg.LinAlgError, match="SVD did not converge"):
+            linalg.svd(C)
+
+    def test_svd_internal_memory_error(self):
+        import resource
+
+        # Create an array that Python can allocate, but that is large enough
+        # that the subsequent SVD workspace allocations will likely fail
+        # when memory is restricted (e.g., in a 2 GB Docker container).
+        limit = 2 * 1024**3  # 2GB in bytes
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+
+        # Example: limit to 2GB (2 * 1024**3 bytes)
+        set_memory_limit(2 * 1024**3)
+        shape = (15_000, 15_000)
+        A = np.ones(shape, dtype=np.float64)  # ~3.2 GB, likely to blow up at SVD time
+
+        with pytest.raises(MemoryError, match="Failed to allocate memory for SVD computation"):
+            np.linalg.svd(A)
 
 class SVDHermitianCases(HermitianTestCase, HermitianGeneralizedTestCase):
 
