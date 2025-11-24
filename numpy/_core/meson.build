@@ -788,7 +788,7 @@ _umath_tests_mtargets = mod_features.multi_targets(
 
 test_modules_src = [
   ['_umath_tests', [
-      src_file.process('src/umath/_umath_tests.c.src'),
+      src_file.process('src/umath/_umath_tests.cpp),
       'src/common/npy_cpu_features.c',
     ],
     _umath_tests_mtargets.static_lib('_umath_tests_mtargets')
